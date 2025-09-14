@@ -7,7 +7,7 @@ import pytest
 project_path = os.path.abspath( os.path.dirname( __file__) + "/../.." )
 if not project_path in sys.path:
     sys.path.insert(0, project_path)
-from nimble.api import Api, Module, Query, AsyncSession, AsyncConnection
+from nimble.api import Api, Module, Query, AsyncConnection, AsyncConnection
 
 class ApiTest:
 
@@ -37,20 +37,20 @@ class ApiTest:
             def get_executable_queries(self) -> Set[Type[Query]]:
                 return { HelloQuery }
             
-            async def execute(self, query:Query, db:AsyncSession) -> int:
+            async def execute(self, query:Query, db:AsyncConnection) -> int:
                 self.num_executes += 1
                 return self.num_executes
             
             def pre_execute_for(self) -> Set[Type[Query]]:
                 return { HelloQuery }
 
-            async def pre_execute(self, query:Query, db:AsyncSession) -> None:
+            async def pre_execute(self, query:Query, db:AsyncConnection) -> None:
                 self.num_pre_executes += 1
                 
             def post_execute_for(self) -> Set[Type[Query]]:
                 return { HelloQuery }
 
-            async def post_execute(self, query:Query, db:AsyncSession, result:int) -> None:
+            async def post_execute(self, query:Query, db:AsyncConnection, result:int) -> None:
                 self.num_post_executes += 1
             
         class ModuleWithShutdownException(Module):

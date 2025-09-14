@@ -1,7 +1,7 @@
 # builtin
 from typing import Optional, Any, Set, Type, TYPE_CHECKING
 # 3rd party
-from sqlalchemy.ext.asyncio import AsyncSession, AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncConnection
 # local
 if TYPE_CHECKING:
     from nimble.api import Api
@@ -37,17 +37,17 @@ class Module:
     def get_executable_queries(self) -> Set[Type["Query"]]:
         raise NotImplementedError()
     
-    async def execute(self, query:Query, db:AsyncSession) -> Any:
+    async def execute(self, query:Query, db:AsyncConnection) -> Any:
         raise NotImplementedError()
             
     def pre_execute_for(self) -> Set[Type["Query"]]:
         return set()
 
-    async def pre_execute(self, query:Query, db:AsyncSession) -> None:
+    async def pre_execute(self, query:Query, db:AsyncConnection) -> None:
         pass
 
     def post_execute_for(self) -> Set[Type["Query"]]:
         return set()
 
-    async def post_execute(self, query:Query, db:AsyncSession, result:Any) -> None:
+    async def post_execute(self, query:Query, db:AsyncConnection, result:Any) -> None:
         pass

@@ -2,7 +2,7 @@
 from typing import Optional, Union, AsyncGenerator, Callable, Type, Any, Literal, TYPE_CHECKING
 import logging
 # 3rd party
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, AsyncConnection, AsyncEngine, async_sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncConnection, AsyncEngine
 # local
 from nimble.module import Module
 from nimble.query import Query
@@ -16,7 +16,6 @@ class Api:
         
         # db
         self._engine: Optional[AsyncEngine] = None
-        self._async_sessionmaker: Optional[async_sessionmaker] = None
 
     async def register_module(self, module_type:Type[Module]) -> Module:        
         module = module_type(self)
@@ -27,7 +26,7 @@ class Api:
                 raise ValueError(f"Query type {query_type.__name__} is already registered by module {self._modules[query_type].__class__.__name__}")
         
         engine = self._get_engine()
-        async with engine.connect() as conn:
+        async with engine.begin() as conn:
             await module.initialize(conn)
             
         for query_type in executable_queries:
@@ -41,7 +40,7 @@ class Api:
                 del self._modules[query_type]   
         
         engine = self._get_engine()
-        async with engine.connect() as conn:
+        async with engine.begin() as conn:
             await module.shutdown(conn)
 
     async def execute(self, query:Query) -> Any:               
@@ -53,8 +52,8 @@ class Api:
         pre_execute_hooks = {mod for mod in unique_modules if type(query) in mod.pre_execute_for()}
         post_execute_hooks = {mod for mod in unique_modules if type(query) in mod.post_execute_for()}
 
-        session_maker = self._get_async_session_maker()
-        async with session_maker() as db:
+        engine = self._get_engine()
+        async with engine.begin() as db:
 
             for hook in pre_execute_hooks:
                 await hook.pre_execute(query, db)
@@ -77,13 +76,7 @@ class Api:
         if self._engine is not None:
             await self._engine.dispose()
             self._engine = None
-        self._async_sessionmaker = None
     
-    def _get_async_session_maker(self) -> async_sessionmaker:
-        if self._async_sessionmaker is None:
-            self._async_sessionmaker = async_sessionmaker(self._get_engine(), expire_on_commit=True)
-        return self._async_sessionmaker
-
     def _get_engine(self) -> AsyncEngine:
         if self._engine is None:
             self._engine = create_async_engine(self._api_config.database_url, echo=self._api_config.echo_sql)
