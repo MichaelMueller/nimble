@@ -1,0 +1,14 @@
+pydantic
+pydantic_settings
+aiosqlite
+asyncpg
+sqlalchemy[asyncio]
+fastapi
+uvicorn[standard]
+# modules
+PyJWT
+argon2-cffi
+# testing
+pytest
+pytest-cov
+pytest-asyncio

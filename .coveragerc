@@ -1,0 +1,7 @@
+[run]
+omit = nimble/tests/*
+    nimble/tests/**
+    tmp/*
+    tmp/**
+    var/*
+    var/**
