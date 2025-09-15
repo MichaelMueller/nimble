@@ -1,5 +1,5 @@
 # builtin
-from typing import Optional, Union, AsyncGenerator, Callable, Type, Any, Literal, TYPE_CHECKING
+from typing import Optional, Union, Set, Callable, Type, Any, Literal, TYPE_CHECKING, Dict, List, Tuple
 import logging
 # 3rd party
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncConnection, AsyncEngine
@@ -7,71 +7,89 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncConnection, AsyncEn
 from nimble.module import Module
 from nimble.query import Query
 from nimble.api_config import ApiConfig
+from nimble.unprocessable_query_exception import UnprocessableQueryException
 
 class Api:
-    def __init__(self, config:Optional[ApiConfig]=None):       
+    def __init__(self, config:Optional[ApiConfig]=None, engine:Optional[AsyncEngine]=None):       
         self._api_config = config or ApiConfig()
         # state 
-        self._modules:dict[Type[Query], Module] = {}
-        
+        self._modules:Dict[Type[Module], Module] = {}
         # db
+        self._db_initialized: bool = False
         self._engine: Optional[AsyncEngine] = None
-
-    async def register_module(self, module_type:Type[Module]) -> Module:        
-        module = module_type(self)
         
-        executable_queries = module.get_executable_queries()
-        for query_type in executable_queries:
-            if query_type in self._modules:
-                raise ValueError(f"Query type {query_type.__name__} is already registered by module {self._modules[query_type].__class__.__name__}")
+    def clone(self) -> "Api":
+        clone = Api(config=self._api_config.model_copy(deep=True), engine=self._get_engine())
+        for module in self._modules:
+            clone.register_module(module.__class__)
+        return clone
+
+    async def register_module(self, module_class:Type[Module]) -> None:                     
+        # check unique query type processor
+        module:Module = module_class()              
+        for qtype in module.processable_queries():
+            for existing_module in self._modules.values():
+                if qtype in existing_module.processable_queries():
+                    raise KeyError(f"Query type {qtype.__name__} is already registered by module {existing_module.__class__.__name__}")
+
+        self._modules[module.__class__] = module
+
+        engine = self._get_engine()
+        async with engine.begin() as conn:
+            await module.initialize(self, conn if self._db_initialized is False else None)            
+
+    async def unregister_module(self, module_class:Type[Module]) -> None:        
+        module = self._modules.pop(module_class)
         
         engine = self._get_engine()
         async with engine.begin() as conn:
-            await module.initialize(conn)
-            
-        for query_type in executable_queries:
-            self._modules[query_type] = module
-                        
-        return module
+            await module.shutdown(self, conn if self._db_initialized is False else None)
 
-    async def unregister_module(self, module:Module) -> None:
-        for query_type, mod in list(self._modules.items()):
-            if mod == module:
-                del self._modules[query_type]   
+    async def execute(self, query:"Query") -> Any: 
+        qtype = type(query)
+        # for the hooks: consider all subclasses of the query type
+        qtype_mros = [t for t in qtype.__mro__ if issubclass(t, Query)]
         
-        engine = self._get_engine()
-        async with engine.begin() as conn:
-            await module.shutdown(conn)
-
-    async def execute(self, query:Query) -> Any:               
-        if type(query) not in self._modules:
-            raise ValueError(f"No module registered to handle query type {type(query).__name__}")
+        # collect relevant modules
+        processor_module:Optional[Module] = None
+        pre_process_modules: Set[Module] = set()
+        post_process_modules: Set[Module] = set()
         
-        # determine hooks
-        unique_modules = set(self._modules.values())
-        pre_execute_hooks = {mod for mod in unique_modules if type(query) in mod.pre_execute_for()}
-        post_execute_hooks = {mod for mod in unique_modules if type(query) in mod.post_execute_for()}
-
-        engine = self._get_engine()
-        async with engine.begin() as db:
-
-            for hook in pre_execute_hooks:
-                await hook.pre_execute(query, db)
+        for module in self._modules.values():
             
-            module = self._modules[type(query)]
-            result = await module.execute(query, db)
-
-            for hook in post_execute_hooks:
-               await hook.post_execute(query, db, result)
+            if qtype in module.processable_queries():
+                processor_module = module
                 
+            for qtype_mro in qtype_mros:
+                if qtype_mro in module.pre_processable_queries():
+                    pre_process_modules.add(module)
+                if qtype_mro in module.post_processable_queries():
+                    post_process_modules.add(module)
+            
+        if processor_module is None:
+            raise UnprocessableQueryException(f"No module registered to handle query of type {qtype.__name__}")
+        
+        # run the query
+        async with self._engine.begin() as db:
+
+            # pre process
+            for m in pre_process_modules:
+                await m.pre_process(self, query, db)
+                    
+            result = await processor_module.process(self, query, db)
+
+            # post process
+            for m in post_process_modules:
+                await m.post_process(self, query, db, result)
+
             return result
 
     async def shutdown(self) -> None:        
-        for module in list(self._modules.values()):
+        for module_type in list( self._modules.keys() ).copy():
             try:
-                await self.unregister_module(module)
+                await self.unregister_module(module_type)
             except Exception as e:
-                logging.error(f"Error shutting down module {module.__class__.__name__}: {e}")
+                logging.error(f"Error shutting down module {module_type.__name__}: {e}")
 
         if self._engine is not None:
             await self._engine.dispose()
@@ -81,3 +99,4 @@ class Api:
         if self._engine is None:
             self._engine = create_async_engine(self._api_config.database_url, echo=self._api_config.echo_sql)
         return self._engine
+    

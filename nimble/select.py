@@ -5,12 +5,14 @@ import pydantic
 from sqlalchemy import ColumnElement, Table, Column
 from sqlalchemy import or_
 # local
+from nimble.query import Query
 from nimble.descriptor import Descriptor
 
-class Select(pydantic.BaseModel):
+class Select(Query):
     descriptors: list[Descriptor] = []
     limit: Optional[int] = None
     offset: Optional[int] = None
+    order_by: list[tuple[str, Literal["asc", "desc"]]] = []
     
     def to_bool_expression(self, table: Table) -> ColumnElement[bool] | None:        
         expressions = []

@@ -12,12 +12,12 @@ from nimble.user_select import UserSelect
 
 class UserModule(Module):
 
-    def __init__(self, api: "Api"):
-        super().__init__(api)
-        self._initialized: bool = False
+    def __init__(self):
         self._users_table: Optional[Table] = None
-    
-    async def _initialize(self, db:AsyncConnection) -> None:
+            
+    async def initialize(self, api:"Api", db:Optional[AsyncConnection]) -> None:
+        if db is None:
+            return
         metadata = MetaData()
         self._users_table = Table(
             "users",
@@ -28,12 +28,11 @@ class UserModule(Module):
             Column("password", String(255), nullable=False),
         )
         await db.run_sync(metadata.create_all)
-        self._initialized = True
           
-    def get_executable_queries(self) -> Set[Type["Query"]]:
-        return {UserCreate, UserSelect}
+    def processable_queries(self) -> Set[Type["Query"]]:
+        return { UserCreate, UserSelect }
     
-    async def execute(self, query:Query, db:AsyncConnection) -> int | list[tuple]:
+    async def process(self, api:"Api", query:Query, db:AsyncConnection) -> int | list[tuple]:
         if isinstance(query, UserCreate):
             insert_stmt = self._users_table.insert().values(
                 username=query.username,
