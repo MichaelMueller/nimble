@@ -83,27 +83,32 @@ class DataObject(pydantic.BaseModel):
 
     @staticmethod
     def create_source(model: Type[pydantic.BaseModel]) -> str:
-        lines = ["from pydantic import BaseModel", "", f"class {model.__name__}(BaseModel):"]
+        imports = ["from pydantic import BaseModel"]
+        lines = [f"class {model.__name__}(BaseModel):"]
         for name, field in model.model_fields.items():
             current_line:str = f"    {name}: "
             origin = get_origin(field.annotation)
             
             types:set | None = None
             if origin is Union:
+                imports.append("from typing import Union")
                 current_line += "Union["
-                types = { t.__name__ if t != None else "None" for t in get_args(field.annotation) }
+                types = { t.__name__ if t != type(None) else "None" for t in get_args(field.annotation) }
                 current_line += ", ".join(types) + "]"
             elif origin is Literal:
+                imports.append("from typing import Literal")
                 current_line += "Literal["
                 types = { t.__name__ for t in get_args(field.annotation) }
                 current_line += ", ".join(types) + "]"
             elif field.annotation in [int, str, float, bool, bytes]:
                 current_line += f"{field.annotation.__name__}"
             else:
-                raise TypeError(f"Unsupported field type: {field.annotation} for field {name}")
+                imports.append("from " + field.annotation.__module__ + " import " + field.annotation.__name__)
+                current_line += f"{field.annotation.__name__}"
                 
             current_line += " = " + str(field.get_default()) if not field.is_required() else ""
             lines.append(current_line)
+        lines = imports + [""] + lines
         source = "\n".join(lines)
         return source
 

@@ -8,11 +8,14 @@ project_path = os.path.abspath( os.path.dirname( __file__) + "/../.." )
 if not project_path in sys.path:
     sys.path.insert(0, project_path)
 from nimble.data_object import DataObject
-
+from nimble.field_condition import FieldCondition
 class TestModel(DataObject):
     field1: str
     field2: int
     field3: Optional[float] = pydantic.Field(default=None)
+    
+class PrintableModel(TestModel):
+    field4: Optional[FieldCondition] = None
 
 class DataObjectTest:
 
@@ -40,8 +43,8 @@ class DataObjectTest:
         assert update_instance.field2 is None
         assert update_instance.field3 is None
         
-        source = DataObject.create_source( TestModel )
-        assert "class TestModel" in source
+        source = DataObject.create_source( PrintableModel )
+        assert "class PrintableModel" in source
         assert "field1: str" in source
         assert "field2: int" in source
         #assert "field3: Optional[float]" in source
