@@ -10,5 +10,3 @@ from nimble.field_condition import FieldCondition
 class UserDescriptor(Descriptor):
     id: Optional[FieldCondition] = None
     username: Optional[FieldCondition] = None
-    email: Optional[FieldCondition] = None
-    password: Optional[FieldCondition] = None

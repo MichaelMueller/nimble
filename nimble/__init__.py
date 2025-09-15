@@ -10,7 +10,7 @@ from nimble.descriptor import Descriptor
 from nimble.select import Select
 from nimble.eq import Eq
 from nimble.in_ import In
-from nimble.table import Table
+from nimble.data_object import DataObject
 
 from nimble.user_create import UserCreate
 from nimble.user_module import UserModule

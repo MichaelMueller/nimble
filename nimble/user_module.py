@@ -6,6 +6,7 @@ from sqlalchemy import Table, Column, Integer, String, MetaData
 # local
 if TYPE_CHECKING:
     from nimble.api import Api
+from nimble.user import User
 from nimble.module import Module, Query
 from nimble.user_create import UserCreate
 from nimble.user_select import UserSelect
@@ -18,15 +19,7 @@ class UserModule(Module):
     async def initialize(self, api:"Api", db:Optional[AsyncConnection]) -> None:
         if db is None:
             return
-        metadata = MetaData()
-        self._users_table = Table(
-            "users",
-            metadata,
-            Column("id", Integer, primary_key=True, autoincrement=True),
-            Column("username", String(255), nullable=False, unique=True),
-            Column("email", String(255), nullable=False, unique=True),
-            Column("password", String(255), nullable=False),
-        )
+        metadata, self._users_table = User.to_sqlalchemy_table()
         await db.run_sync(metadata.create_all)
           
     def processable_queries(self) -> Set[Type["Query"]]:
