@@ -81,6 +81,18 @@ class DataObject(pydantic.BaseModel):
             fields[name] = (Union[field.annotation, None], None)
         return pydantic.create_model(f"{cls.__name__}Update", **fields)
 
+    @classmethod
+    def create_delete_model(cls) -> Type[pydantic.BaseModel]:
+        return pydantic.create_model(f"{cls.__name__}Delete", ids=(list[int], ...))
+
+    @classmethod
+    def create_descriptor(cls) -> Type[pydantic.BaseModel]:
+        from field_condition import FieldCondition
+        fields = {}
+        for name, field in cls.model_fields.items():
+            fields[name] = (Union[FieldCondition, None], None)
+        return pydantic.create_model(f"{cls.__name__}Descriptor", **fields)
+
     @staticmethod
     def create_source(model: Type[pydantic.BaseModel]) -> str:
         imports = ["from pydantic import BaseModel"]
